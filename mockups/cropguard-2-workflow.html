@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CropGuard 2.0 — Workflow showcase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,520;9..144,640&family=Outfit:wght@380;460;560;640&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #17241c;
+    --muted: #5c6b62;
+    --line: #e4ddd0;
+    --paper: #f4f0e6;
+    --card: #fffcf7;
+    --green: #0f6b43;
+    --green-dark: #08462c;
+    --wheat: #e8d7b0;
+    --clay: #8d4b32;
+    --wa-header: #075e54;
+    --wa-bg: #efe7dc;
+    --wa-out: #d9fdd3;
+    --wa-in: #ffffff;
+    --danger: #9d2c2c;
+    --ok: #0f6b43;
+    --shadow: 0 18px 50px rgba(23, 36, 28, 0.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: Outfit, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #e7f3ea 0%, transparent 50%),
+      var(--paper);
+    min-height: 100%;
+  }
+  button, select { font-family: inherit; }
+  button { cursor: pointer; }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 252, 247, 0.92);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    backdrop-filter: blur(8px);
+    flex-wrap: wrap;
+  }
+  .mark {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--green);
+    display: grid; place-items: center;
+    flex: none;
+  }
+  .mark svg { width: 22px; height: 22px; }
+  .top h1 {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 22px;
+    font-weight: 560;
+    margin: 0;
+    letter-spacing: -0.03em;
+  }
+  .top p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .top .spacer { flex: 1; }
+  .chip {
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 560;
+  }
+  .chip.on { background: var(--green); color: white; border-color: var(--green); }
+  .layout {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    min-height: calc(100vh - 70px);
+  }
+  .stage-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  nav.chapters {
+    border-right: 1px solid var(--line);
+    padding: 14px 10px 28px;
+  }
+  nav.chapters button.ch {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    border-radius: 12px;
+    padding: 10px 10px;
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 8px;
+    align-items: start;
+    color: var(--ink);
+  }
+  nav.chapters button.ch small {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 460;
+    margin-top: 2px;
+  }
+  nav.chapters button.ch strong { font-size: 13.5px; font-weight: 600; }
+  nav.chapters button.ch .n {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: #efe8da;
+    font-size: 12px; font-weight: 640;
+  }
+  nav.chapters button.ch.active { background: white; box-shadow: 0 1px 0 var(--line); }
+  nav.chapters button.ch.active .n { background: var(--green); color: white; }
+  .stage-wrap { padding: 22px 22px 40px; min-width: 0; }
+  .stage-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 14px;
+  }
+  .kicker {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--green);
+    font-weight: 640;
+    margin: 0 0 4px;
+  }
+  .stage-head h2 {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 30px;
+    margin: 0;
+    letter-spacing: -0.03em;
+    font-weight: 560;
+  }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    border: 1px solid var(--line);
+    background: white;
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 560;
+  }
+  .btn.primary { background: var(--ink); color: white; border-color: var(--ink); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .phone-row { display: flex; justify-content: center; }
+  .phone {
+    width: min(380px, 100%);
+    height: 680px;
+    background: #111;
+    border-radius: 36px;
+    padding: 12px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .phone .screen {
+    background: var(--wa-bg);
+    height: 100%;
+    border-radius: 26px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .wa-top {
+    background: var(--wa-header);
+    color: white;
+    padding: 28px 12px 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #128c7e;
+    display: grid; place-items: center;
+    font-weight: 640; font-size: 13px;
+  }
+  .wa-top .who { font-weight: 640; font-size: 14px; }
+  .wa-top .sub { font-size: 11px; opacity: 0.85; }
+  .thread {
+    flex: 1;
+    overflow: auto;
+    padding: 12px 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .bubble {
+    max-width: 86%;
+    padding: 8px 10px 6px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.35;
+    position: relative;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  .bubble.in { background: var(--wa-in); align-self: flex-start; border-top-left-radius: 2px; }
+  .bubble.out { background: var(--wa-out); align-self: flex-end; border-top-right-radius: 2px; }
+  .bubble .time { display: block; text-align: right; font-size: 10px; color: #667; margin-top: 4px; }
+  .bubble.system {
+    align-self: center;
+    background: #f7f1c8;
+    color: #5c5330;
+    font-size: 12px;
+    max-width: 92%;
+    text-align: center;
+  }
+  .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .choices span {
+    background: white;
+    border: 1px solid #b7d7c8;
+    color: var(--wa-header);
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 640;
+  }
+  .voice {
+    display: flex; gap: 8px; align-items: center; min-width: 210px;
+  }
+  .play {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--wa-header); color: white;
+    display: grid; place-items: center; font-size: 11px; flex: none;
+  }
+  .wave { display: flex; align-items: center; gap: 2px; height: 22px; flex: 1; }
+  .wave i {
+    display: block; width: 3px; background: #6aa88a; border-radius: 2px;
+  }
+  .transcript {
+    font-size: 12px; color: #3d5348; margin-top: 6px;
+    border-top: 1px dashed #c9d8ce; padding-top: 6px;
+  }
+  .photo-card, .loc-card, .template {
+    width: 230px;
+  }
+  .leaf {
+    height: 120px; border-radius: 8px;
+    background: linear-gradient(#d7e6c8, #8ea56a);
+    display: grid; place-items: center;
+    margin-bottom: 6px;
+  }
+  .loc-card .map {
+    height: 92px; border-radius: 8px; margin-bottom: 6px;
+    background:
+      linear-gradient(180deg, transparent 46%, #c4553a 46%, #c4553a 50%, transparent 50%),
+      linear-gradient(90deg, transparent 58%, #c4553a 58%, #c4553a 62%, transparent 62%),
+      #d5e2c4;
+    position: relative;
+  }
+  .pin {
+    position: absolute; width: 12px; height: 12px; border-radius: 50% 50% 50% 0;
+    background: var(--danger); transform: rotate(-45deg); left: 58%; top: 40%;
+  }
+  .pin.ok { background: var(--green); left: 46%; top: 48%; }
+  .template {
+    border-left: 3px solid var(--green);
+    padding-left: 8px;
+  }
+  .template .tag {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--green);
+  }
+  .composer {
+    background: #f0f0f0;
+    padding: 8px;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .composer .fake {
+    flex: 1; background: white; border-radius: 18px;
+    padding: 8px 12px; font-size: 13px; color: #888;
+  }
+  .mic {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--wa-header);
+  }
+  aside.notes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .note-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .note-card strong {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  aside.notes h3 {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 18px;
+    margin: 0 0 8px;
+  }
+  .say {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; grid-column: 1 / -1; }
+  .pill {
+    font-size: 11px; font-weight: 640; border-radius: 999px; padding: 4px 8px;
+    background: #e7f3ea; color: var(--green-dark);
+  }
+  .pill.later { background: #f6e7d8; color: var(--clay); }
+  .pill.now { background: #e7f3ea; color: var(--green-dark); }
+  .journey { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; min-width: 0; }
+  .jcard {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    text-align: left;
+    color: inherit;
+  }
+  .jcard b { display: block; margin: 6px 0 4px; font-size: 15px; }
+  .jcard span { color: var(--muted); font-size: 13px; line-height: 1.35; display: block; }
+  .jcard em {
+    font-style: normal; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--green);
+  }
+  .hero-line {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 34px;
+    letter-spacing: -0.03em;
+    margin: 0 0 8px;
+    max-width: 16ch;
+  }
+  .lede { color: var(--muted); max-width: 62ch; margin: 0 0 16px; line-height: 1.45; }
+  .desk, .web {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    min-height: 560px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    min-width: 0;
+  }
+  .desk-top, .web-top {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; border-bottom: 1px solid var(--line);
+  }
+  .desk-top h3, .web-top h3 { margin: 0; font-size: 16px; }
+  .split { display: grid; grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); min-height: 520px; }
+  .queue button.case {
+    width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line);
+    background: white; padding: 12px 14px;
+  }
+  .queue button.case.on { background: #f3faf6; }
+  .queue button.case b { display: block; font-size: 14px; }
+  .queue button.case span { color: var(--muted); font-size: 12px; }
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 6px; border-radius: 999px; margin-top: 6px;
+  }
+  .badge.ok { background: #e5f6ec; color: var(--green-dark); }
+  .badge.wait { background: #fff3d6; color: #8a5a10; }
+  .badge.no { background: #fde8e8; color: var(--danger); }
+  .detail { padding: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat { background: var(--paper); border-radius: 12px; padding: 10px; }
+  .stat b { display: block; font-size: 18px; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 72px; margin: 8px 0 12px; }
+  .bars i { flex: 1; background: #b7d4c4; border-radius: 2px 2px 0 0; display: block; }
+  .bars i.hit { background: var(--clay); }
+  .mapbox {
+    height: 160px; border-radius: 12px; position: relative;
+    background: #e4eedc; border: 1px dashed #8eaa8a; margin-bottom: 12px;
+  }
+  .parcel {
+    position: absolute; left: 22%; top: 18%; width: 46%; height: 58%;
+    border: 2px solid var(--green-dark); background: rgba(15,107,67,0.12); border-radius: 8px;
+  }
+  .dot {
+    position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid white;
+  }
+  .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .call {
+    width: 380px; margin: 0 auto; background: #101614; color: white;
+    border-radius: 36px; min-height: 640px; padding: 28px 20px;
+    box-shadow: var(--shadow); text-align: center;
+  }
+  .call .orb {
+    width: 92px; height: 92px; border-radius: 50%; margin: 36px auto 12px;
+    background: var(--green); display: grid; place-items: center; font-weight: 700;
+  }
+  .call h3 { margin: 8px 0 0; font-family: Fraunces, Georgia, serif; font-weight: 520; font-size: 28px; }
+  .call .line {
+    margin-top: 22px; background: #1b2820; border-radius: 14px; padding: 12px; text-align: left; font-size: 14px; line-height: 1.4;
+  }
+  .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .keys div { border: 1px solid #2c4034; border-radius: 12px; padding: 12px; }
+  .web-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 12px; padding: 16px; }
+  .panel { border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  .panel h4 { margin: 0 0 8px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; color: var(--muted); font-weight: 640; }
+  td, th { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  .hidden { display: none; }
+  @media (max-width: 1080px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.chapters { display: flex; gap: 6px; overflow: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    nav.chapters button.ch { width: auto; min-width: 180px; }
+    aside.notes { grid-template-columns: 1fr; }
+    .journey, .split, .web-grid, .stats { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 21c4-4 7-7.2 7-11a7 7 0 1 0-14 0c0 3.8 3 7 7 11z"/><path d="M12 10v4"/></svg>
+  </div>
+  <div>
+    <h1>CropGuard 2.0</h1>
+    <p>Product walkthrough · ambient WhatsApp, voice, and automatic drought pay</p>
+  </div>
+  <div class="spacer"></div>
+  <button class="chip" id="notes-toggle" type="button">Hide notes</button>
+  <span class="chip">Synthetic demo · 1 Oct 2026</span>
+</header>
+<div class="layout">
+  <nav class="chapters" id="nav"></nav>
+  <main class="stage-wrap">
+    <div class="stage-head">
+      <div>
+        <p class="kicker" id="kicker"></p>
+        <h2 id="title"></h2>
+      </div>
+      <div class="controls">
+        <button class="btn" id="alt" type="button"></button>
+        <button class="btn" id="prev" type="button">Previous beat</button>
+        <button class="btn primary" id="next" type="button">Next beat</button>
+      </div>
+    </div>
+    <div class="stage-body">
+      <aside class="notes" id="notes"></aside>
+      <div id="stage"></div>
+    </div>
+  </main>
+</div>
+<script>
+const chapters = [
+  {
+    id: "shift",
+    n: "01",
+    label: "The shift",
+    sub: "Why WhatsApp",
+    kicker: "Context",
+    title: "The farmer never opens a browser",
+    stage: "journey",
+    beats: [
+      {
+        note: {
+          say: "Today a farmer has to find our website, type into a chat box, and remember to come back. Most only do that after the crop has already failed. CropGuard 2.0 lives in the WhatsApp thread they already open every morning.",
+          system: "The web chat stays as an internal console. Farmers use WhatsApp voice, photos, and a toll-free call. The insurer sees evidence on one desk.",
+          kpi: "Onboarding target moves from a long web form to a WhatsApp conversation. Retention comes from a useful 7am message, not from a claim."
+        }
+      }
+    ]
+  },
+  {
+    id: "onboard",
+    n: "02",
+    label: "Onboard",
+    sub: "Meera · Nashik",
+    kicker: "FR-1 · Q1",
+    title: "Meera starts with one message",
+    stage: "whatsapp",
+    contact: "CropGuard",
+    status: "Business account",
+    beats: [
+      {
+        messages: [
+          { side: "in", text: "Hi", time: "8:14" }
+        ],
+        note: {
+          say: "Meera does not download an app. She messages the CropGuard business number the way she messages her family.",
+          system: "The webhook reads her WhatsApp number, checks it against our farmers, and finds no account. A 15-minute signup session opens.",
+          kpi: "First message to a linked number, with no web form."
+        }
+      },
+      {
+        messages: [
+          { side: "out", text: "नमस्ते Meera. I can continue in your language.", time: "8:14", choices: ["मराठी", "हिंदी", "English"] }
+        ],
+        note: {
+          say: "We answer in the language she will actually use. Hindi, Marathi, and English are on the first screen. Telugu and Punjabi follow the same pattern.",
+          system: "Language is stored on her channel profile and reused for voice replies.",
+          kpi: "Removes the English-only wall."
+        }
+      },
+      {
+        messages: [
+          { side: "in", text: "हिंदी", time: "8:15" },
+          { side: "out", text: "What should I call you, and which district is the farm in? You can type or send a voice note.", time: "8:15" }
+        ],
+        note: {
+          say: "Her WhatsApp number is already proof that she holds that phone. We do not ask her to read out an Aadhaar number.",
+          system: "wa_id is matched to the mobile number. Aadhaar is not collected in the chat.",
+          kpi: "One-step identity, safe to store."
+        }
+      },
+      {
+        messages: [
+          { side: "in", voice: "0:06", transcript: "मैं मीरा हूँ. नासिक.", time: "8:16" },
+          { side: "out", text: "Thanks Meera, Nashik. What is the survey number on your land record?", time: "8:16" }
+        ],
+        note: {
+          say: "She can speak. We show the room the transcript so everyone can follow. She only hears and sees a short reply.",
+          system: "Speech comes back as text plus a language code. Name and district are saved on the session.",
+          kpi: "Voice-in for people who do not like typing."
+        }
+      },
+      {
+        messages: [
+          { side: "in", text: "NSK-4418", time: "8:17" },
+          { side: "out", text: "I found 1.4 hectares in Nashik, survey NSK-4418. Choose a season of cover.", time: "8:17", choices: ["Basic · ₹3,500", "Premium · ₹5,600", "Full · ₹9,100"] }
+        ],
+        note: {
+          say: "The survey number links the land. Premium is recommended because it pays below 120 millimetres and settles fastest.",
+          system: "Land point is stored. The three plans are the live catalog: Basic ₹2,500, Premium ₹4,000, Comprehensive ₹6,500 per hectare.",
+          kpi: "Policy purchase finally happens in the product, not as a dead end on the website."
+        }
+      },
+      {
+        messages: [
+          { side: "in", text: "Premium", time: "8:18" },
+          { side: "out", html: "premium", time: "8:18" }
+        ],
+        note: {
+          say: "She is covered before she leaves the chat. Tomorrow morning she can get weather here. If the rains fail, she does not have to learn a new screen.",
+          system: "A policy row is written: 1.4 ha, ₹70,000 cover, 120 mm threshold, ₹5,600 premium. Her number is now a known farmer.",
+          kpi: "Onboarding complete inside one WhatsApp thread."
+        }
+      }
+    ]
+  },
+  {
+    id: "voice",
+    n: "03",
+    label: "Speak a claim",
+    sub: "Ramesh · Latur",
+    kicker: "FR-2 · Q1",
+    title: "Ramesh describes the drought out loud",
+    stage: "whatsapp",
+    contact: "CropGuard",
+    status: "Online",
+    altLabel: "Show a muddy recording",
+    beats: [
+      {
+        messages: [
+          { side: "in", voice: "0:11", transcript: "लातूर में बारिश नहीं हुई. सोयाबीन सूख रही है.", time: "6:02" }
+        ],
+        note: {
+          say: "Ramesh already has a Premium policy on 1.2 hectares of soybean. He does not fill a claim form. He sends a voice note in Marathi-Hindi mix, which is how he actually talks.",
+          system: "Audio is OGG/Opus. The transcript is stored with the message. Confidence on this take is 0.91.",
+          kpi: "Voice reply budget is measured after the audio file is in our hands. He sees a reply in a few seconds, not a blank box."
+        }
+      },
+      {
+        messages: [
+          { side: "out", text: "I am checking Latur rainfall against your Premium policy.", time: "6:02" }
+        ],
+        note: {
+          say: "We tell him what is happening in one line, in his language, so the pause feels like work and not a frozen screen.",
+          system: "Intent is claim filing. It uses the structured rainfall rule, not a free-form model guess.",
+          kpi: "The expensive vision model is not called for a voice claim."
+        }
+      },
+      {
+        messages: [
+          { side: "out", voice: "0:09", transcript: "48 मिमी बारिश हुई है. कवर 120 मिमी से कम पर चालू होता है. ₹36,000 मंजूर है.", time: "6:02" },
+          { side: "out", text: "Rain in Latur this season is 48 mm. Your cover pays below 120 mm. ₹36,000 is approved to the account ending 7890, within 12 hours.", time: "6:02", choices: ["Track payment", "Talk to a person"] }
+        ],
+        note: {
+          say: "He hears the decision and can read the same facts. ₹36,000 is 60 percent of his ₹60,000 cover, because 48 millimetres is 60 percent short of 120.",
+          system: "decideClaim: coverage × (threshold − rainfall) / threshold. Claim CR-2026-1842 moves to approved. A payment row is opened.",
+          kpi: "Time from his voice note to a decision is inside the same morning, against a 14 to 21 day paper cycle."
+        }
+      }
+    ],
+    alt: [
+      {
+        messages: [
+          { side: "in", voice: "0:04", transcript: "…बारिश… खेत… (unclear)", time: "6:05" }
+        ],
+        note: {
+          say: "If the recording is wind noise, we do not guess a payout.",
+          system: "Confidence is 0.62, under the 0.70 line.",
+          kpi: "A bad transcript cannot approve money."
+        }
+      },
+      {
+        messages: [
+          { side: "out", text: "I could not catch that. Hold the phone close and say the crop and what happened. Or tap to speak with a field officer.", time: "6:05", choices: ["Speak with a person"] }
+        ],
+        note: {
+          say: "He gets a second chance in the same thread, or a person. We do not invent a claim from a garbled note.",
+          system: "The message is flagged for handoff. No claim is created.",
+          kpi: "Fallback is part of the demo, not an error."
+        }
+      }
+    ]
+  },
+  {
+    id: "photo",
+    n: "04",
+    label: "Photograph damage",
+    sub: "Leaf rust · location",
+    kicker: "FR-3 · Q1 review",
+    title: "A photo is evidence, not a payout",
+    stage: "whatsapp",
+    contact: "CropGuard",
+    status: "Online",
+    altLabel: "Pin is 620 m away",
+    beats: [
+      {
+        messages: [
+          { side: "in", html: "leaf", time: "11:20" }
+        ],
+        note: {
+          say: "Ramesh sends a picture of yellow patches on soybean leaves. This is the moment insurers usually send a person on a bike.",
+          system: "The image is stored on the message. WhatsApp often strips the camera location, so we do not trust hidden photo data.",
+          kpi: "Damage classification for the underwriter."
+        }
+      },
+      {
+        messages: [
+          { side: "out", text: "Send your location so I can match this picture to your field.", time: "11:20" }
+        ],
+        note: {
+          say: "We ask for the WhatsApp location pin. That is the geotag.",
+          system: "The pin is compared with the parcel saved at onboarding.",
+          kpi: "Stops a photo taken in someone else's field."
+        }
+      },
+      {
+        messages: [
+          { side: "in", html: "loc-ok", time: "11:21" },
+          { side: "out", text: "This looks like leaf rust on about 35% of the leaf. I have attached the picture to your file for the insurer. Your drought payment still follows the rain gauge, not this photo.", time: "11:21" }
+        ],
+        note: {
+          say: "The picture helps Pooja, our underwriter. It does not by itself release money. Drought cover pays from rainfall.",
+          system: "Damage assessment: leaf rust, severity 35, confidence high, 180 m inside the parcel, accepted. claim payment is not created.",
+          kpi: "Fraud review without slowing the parametric drought payment."
+        }
+      }
+    ],
+    alt: [
+      {
+        messages: [
+          { side: "in", html: "leaf", time: "11:40" },
+          { side: "out", text: "Send your location so I can match this picture to your field.", time: "11:40" },
+          { side: "in", html: "loc-bad", time: "11:41" },
+          { side: "out", text: "This location is 620 m outside your registered field, so I cannot attach the picture. Stand in the field and send the location again.", time: "11:41" }
+        ],
+        note: {
+          say: "Anything beyond 500 metres is refused. The farmer can try again from the right place.",
+          system: "Assessment stored as rejected. No payment row.",
+          kpi: "The 500 m rule, visible."
+        }
+      }
+    ]
+  },
+  {
+    id: "advice",
+    n: "05",
+    label: "Morning advice",
+    sub: "Suresh · Ludhiana",
+    kicker: "FR-4 · retention",
+    title: "Suresh hears from us before a loss",
+    stage: "whatsapp",
+    contact: "CropGuard",
+    status: "Template message",
+    beats: [
+      {
+        messages: [
+          { side: "system", text: "Thursday 7:00 · Suresh has not opened the chat since Tuesday" }
+        ],
+        note: {
+          say: "Suresh grows 10 hectares of wheat and already lives in voice notes. If we only talk when there is a claim, he will forget we exist.",
+          system: "His last inbound message is older than 24 hours, so WhatsApp only allows a pre-approved template.",
+          kpi: "This is the retention engine: a reason to stay, on a morning he is already deciding whether to spray."
+        }
+      },
+      {
+        messages: [
+          { side: "out", html: "spray", time: "7:00" }
+        ],
+        note: {
+          say: "Wind in his area hits 28 kilometres an hour by 11. Spraying now wastes the chemical. We say that in one message.",
+          system: "Opt-in advisory. Farm profile holds wheat and the sowing date. The template name is weather_spray_window.",
+          kpi: "30-day activity comes from advice, not from a claim."
+        }
+      },
+      {
+        messages: [
+          { side: "out", html: "mandi", time: "7:04" }
+        ],
+        note: {
+          say: "The market alert is the second habit: wheat in Ludhiana is up 12 percent, so he can choose when to sell. I would show this as the next release after the weather message is trusted.",
+          system: "Mandi radar is specified, and it is sequenced after the Q1 weather template.",
+          kpi: "A price spike over 10 percent is the alert line."
+        }
+      }
+    ]
+  },
+  {
+    id: "payout",
+    n: "06",
+    label: "Automatic payout",
+    sub: "Anita · Wardha",
+    kicker: "FR-5 · Q1",
+    title: "Anita does not file anything",
+    stage: "whatsapp",
+    contact: "CropGuard",
+    status: "Payout template",
+    beats: [
+      {
+        messages: [
+          { side: "system", text: "Wardha rain gauge · 21 days in a row under 5 mm · cotton policy still active" }
+        ],
+        note: {
+          say: "Anita never opens a form. The season simply stays dry. This is the product difference: the policy watches the weather for her.",
+          system: "Every six hours the worker reads district rainfall. Her policy pays when 21 days stay under 5 mm. A twin policy at 20 days does not pay, so we can show the line.",
+          kpi: "Loss to settlement inside 24 hours, without paperwork."
+        }
+      },
+      {
+        messages: [
+          { side: "out", html: "payout", time: "9:10" }
+        ],
+        note: {
+          say: "She gets a voice-friendly text: the drought rule was met, ₹12,500 is going to her UPI, and she can track it.",
+          system: "One parametric trigger is inserted for this window. The same window cannot pay twice. The blockchain note is a side record and does not hold the money back.",
+          kpi: "She can show this message to her family as proof."
+        }
+      },
+      {
+        messages: [
+          { side: "in", text: "Track", time: "9:12" },
+          { side: "out", html: "track", time: "9:12" }
+        ],
+        note: {
+          say: "Tracking is the same story she would see on the website, told inside the chat.",
+          system: "Payment status: initiated, then credited. Reference UPI-2026-4419. Amount ₹12,500.",
+          kpi: "No call centre for 'where is my money?'"
+        }
+      }
+    ]
+  },
+  {
+    id: "ivr",
+    n: "07",
+    label: "A basic phone",
+    sub: "Later release",
+    kicker: "FR-2 · after Q1",
+    title: "The same answers on a keypad phone",
+    stage: "call",
+    beats: [
+      {
+        note: {
+          say: "Some farmers still do not have WhatsApp. The same brain answers a toll-free call. I would ship this after voice notes are solid.",
+          system: "Twilio voice uses the same orchestrator. SMS needs a registered sender ID in India.",
+          kpi: "Cover the handset that cannot install WhatsApp."
+        }
+      },
+      {
+        note: {
+          say: "She presses 1 and hears the payout in Hindi. No menu tree of twelve options.",
+          system: "Claim status for Anita's number: ₹12,500 credited yesterday.",
+          kpi: "One path for status, one path for weather."
+        }
+      }
+    ]
+  },
+  {
+    id: "desk",
+    n: "08",
+    label: "Underwriter desk",
+    sub: "Pooja · 5,000 claims",
+    kicker: "Insurer",
+    title: "Pooja sees proof before she argues",
+    stage: "desk",
+    beats: [
+      {
+        note: {
+          say: "Pooja should not re-type rainfall. Drought payments are already decided by the gauge. Her time goes to photographs and odd cases.",
+          system: "Three seeded files: Anita paid automatically, Ramesh's leaf photo waiting, Ibrahim's pin rejected.",
+          kpi: "Auto-pay only when the rain rule is met. Photos wait in this queue."
+        }
+      }
+    ]
+  },
+  {
+    id: "home",
+    n: "09",
+    label: "Farmer home",
+    sub: "The record afterwards",
+    kicker: "Web console",
+    title: "The website shows the record, not the front door",
+    stage: "web",
+    beats: [
+      {
+        note: {
+          say: "If a partner or a son wants the paperwork view, it is here. Ramesh did the real work in WhatsApp. This page is the file.",
+          system: "Same claim CR-2026-1842, same ₹36,000, same 48 mm. The insurer totals on the other dashboard read these rows.",
+          kpi: "One set of facts across the phone and the website."
+        }
+      }
+    ]
+  }
+];
+
+const leafSvg = `<div class="leaf"><svg width="86" height="70" viewBox="0 0 86 70"><path d="M10 40 C20 10 60 8 78 20 C60 22 40 40 44 62 C28 50 16 48 10 40Z" fill="#3d6b34"/><circle cx="48" cy="28" r="4" fill="#d6b23a"/><circle cx="58" cy="34" r="3" fill="#c4553a"/><circle cx="40" cy="36" r="3.5" fill="#e0c15a"/></svg></div>`;
+
+function renderRich(m) {
+  if (m.html === "premium") {
+    return `<div class="template"><div class="tag">Policy active</div><b>Premium · Nashik</b><br>1.4 ha · cover ₹70,000<br>Pays when season rain is under 120 mm<br>Premium ₹5,600<div class="choices"><span>What does this cover?</span><span>Share with my son</span></div></div>`;
+  }
+  if (m.html === "leaf") return `${leafSvg}<b>Photo</b><br>Soybean leaves, yellow patches<span class="time">${m.time}</span>`;
+  if (m.html === "loc-ok") return `<div class="loc-card"><div class="map"><div class="pin ok"></div></div><b>Location</b><br>180 m inside your field<span class="time">${m.time}</span></div>`;
+  if (m.html === "loc-bad") return `<div class="loc-card"><div class="map"><div class="pin"></div></div><b>Location</b><br>620 m outside your field<span class="time">${m.time}</span></div>`;
+  if (m.html === "spray") return `<div class="template"><div class="tag">7:00 weather</div>Wind near Ludhiana reaches 28 km/h by 11:00. Delay pesticide spraying until tomorrow morning.<div class="choices"><span>Remind me tomorrow</span></div></div>`;
+  if (m.html === "mandi") return `<div class="template"><div class="tag">Market · later release</div>Wheat in Ludhiana is up 12% since Monday. Your last sale benchmark was ₹2,240 a quintal.</div>`;
+  if (m.html === "payout") return `<div class="template"><div class="tag">Drought rule met</div>Namaste Anita. Wardha has had 21 dry days. <b>₹12,500</b> is on the way to your UPI.<div class="choices"><span>Track</span></div></div>`;
+  if (m.html === "track") return `<b>Payment</b><br>Initiated 9:10<br>Sent to UPI 9:11<br><b>Credited 9:18</b><br>Reference UPI-2026-4419`;
+  return "";
+}
+
+function bubble(m) {
+  if (m.side === "system") return `<div class="bubble system">${m.text}</div>`;
+  const inner = m.voice
+    ? `<div class="voice"><div class="play">▶</div><div class="wave">${[8,14,10,18,12,20,9,16,11,15,8,13].map((h) => `<i style="height:${h}px"></i>`).join("")}</div><span>${m.voice}</span></div>${m.transcript ? `<div class="transcript">${m.transcript}</div>` : ""}`
+    : (m.html ? renderRich(m) : m.text);
+  const choices = m.choices ? `<div class="choices">${m.choices.map((c) => `<span>${c}</span>`).join("")}</div>` : "";
+  const time = m.time && !m.html ? `<span class="time">${m.time}</span>` : "";
+  return `<div class="bubble ${m.side === "in" ? "in" : "out"}">${inner}${choices}${m.html ? "" : time}</div>`;
+}
+
+const state = { index: 0, beat: 0, alt: false, desk: 0 };
+const nav = document.getElementById("nav");
+const stage = document.getElementById("stage");
+const notes = document.getElementById("notes");
+
+function chapter() { return chapters[state.index]; }
+function beats() {
+  const ch = chapter();
+  return state.alt && ch.alt ? ch.alt : ch.beats;
+}
+
+function renderNav() {
+  nav.innerHTML = chapters.map((ch, i) => `
+    <button class="ch ${i === state.index ? "active" : ""}" data-i="${i}" type="button">
+      <span class="n">${ch.n}</span>
+      <span><strong>${ch.label}</strong><small>${ch.sub}</small></span>
+    </button>`).join("");
+  nav.querySelectorAll("button.ch").forEach((b) => b.onclick = () => {
+    state.index = Number(b.dataset.i);
+    state.beat = 0;
+    state.alt = false;
+    render();
+  });
+}
+
+function messagesUntil() {
+  const list = [];
+  beats().slice(0, state.beat + 1).forEach((b) => (b.messages || []).forEach((m) => list.push(m)));
+  return list;
+}
+
+function renderStage() {
+  const ch = chapter();
+  document.getElementById("kicker").textContent = ch.kicker;
+  document.getElementById("title").textContent = ch.title;
+  const altBtn = document.getElementById("alt");
+  if (ch.alt) {
+    altBtn.classList.remove("hidden");
+    altBtn.textContent = state.alt ? "Show the main path" : ch.altLabel;
+  } else altBtn.classList.add("hidden");
+  const last = state.beat >= beats().length - 1;
+  document.getElementById("next").textContent = last ? "Next chapter" : "Next beat";
+  document.getElementById("prev").disabled = state.beat === 0 && state.index === 0;
+
+  if (ch.stage === "journey") {
+    stage.innerHTML = `
+      <p class="hero-line">Meet farmers on the phone they already trust.</p>
+      <p class="lede">Nine stops. Use Next beat, or pick a chapter. The line above the screen is what you say in the room. Arrow keys move the story.</p>
+      <div class="journey">
+        ${[
+          ["02", "Onboard", "Meera messages a number and leaves with a policy."],
+          ["03", "Speak", "Ramesh sends a voice note and hears the rupee decision."],
+          ["04", "Photograph", "A leaf picture is checked against his field and filed."],
+          ["05", "Advise", "Suresh gets a 7am spray warning before he wastes a tank."],
+          ["06", "Pay", "Anita's payout starts because the gauge stayed dry."],
+          ["08", "Review", "Pooja opens the photo queue, not a pile of paper."]
+        ].map((c, idx) => `<button class="jcard" data-jump="${[1,2,3,4,5,7][idx]}" type="button"><em>Chapter ${c[0]}</em><b>${c[1]}</b><span>${c[2]}</span></button>`).join("")}
+      </div>`;
+    stage.querySelectorAll("[data-jump]").forEach((b) => b.onclick = () => {
+      state.index = Number(b.dataset.jump);
+      state.beat = 0;
+      state.alt = false;
+      render();
+    });
+    return;
+  }
+
+  if (ch.stage === "whatsapp") {
+    const msgs = messagesUntil().map(bubble).join("");
+    stage.innerHTML = `<div class="phone-row"><div class="phone"><div class="screen">
+      <div class="wa-top"><div class="avatar">CG</div><div><div class="who">${ch.contact}</div><div class="sub">${ch.status}</div></div></div>
+      <div class="thread" id="thread">${msgs}</div>
+      <div class="composer"><div class="fake">Message</div><div class="mic"></div></div>
+    </div></div></div>`;
+    const thread = document.getElementById("thread");
+    thread.scrollTop = thread.scrollHeight;
+    return;
+  }
+
+  if (ch.stage === "call") {
+    const second = state.beat > 0;
+    stage.innerHTML = `<div class="call">
+      <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.7">Toll-free · later release</div>
+      <div class="orb">CG</div>
+      <h3>${second ? "Claim status" : "CropGuard"}</h3>
+      <div style="opacity:.8">${second ? "00:18" : "Incoming"}</div>
+      <div class="line">${second
+        ? "अनीता, आपका ₹12,500 का सूखा भुगतान कल खाते में जमा हो गया."
+        : "For claim status, press 1. For today's weather, press 2."}</div>
+      <div class="keys"><div><b>1</b><br>Claim status</div><div><b>2</b><br>Weather</div></div>
+    </div>`;
+    return;
+  }
+
+  if (ch.stage === "desk") {
+    const cases = [
+      { name: "Anita Deshmukh", meta: "Wardha · cotton · ₹12,500", badge: "ok", label: "Paid by rain rule" },
+      { name: "Ramesh Patil", meta: "Latur · leaf photo · 180 m", badge: "wait", label: "Photo needs a look" },
+      { name: "Ibrahim Khan", meta: "Pin 620 m outside parcel", badge: "no", label: "Photo refused" }
+    ];
+    const c = cases[state.desk];
+    const bodies = [
+      `<div class="stats"><div class="stat"><b>21</b><span>Dry days</span></div><div class="stat"><b>&lt;5 mm</b><span>Each day</span></div><div class="stat"><b>₹12,500</b><span>Credited</span></div><div class="stat"><b>Auto</b><span>No photo used</span></div></div>
+       <div class="bars">${Array.from({length:21}, (_,i)=>`<i class="${i>16?'hit':''}" style="height:${8+ (i%3)*6}px"></i>`).join("")}</div>
+       <p>Rain bars for the cotton window. The rule fired on day 21. Pooja can audit it. She does not have to approve it.</p>`,
+      `<div class="mapbox"><div class="parcel"></div><div class="dot" style="left:48%;top:52%;background:#0f6b43"></div></div>
+       <div class="stats"><div class="stat"><b>Leaf rust</b><span>Damage type</span></div><div class="stat"><b>35%</b><span>Severity</span></div><div class="stat"><b>180 m</b><span>Inside parcel</span></div><div class="stat"><b>No pay</b><span>From this photo</span></div></div>
+       <p>Drought claim CR-2026-1842 was already decided from 48 mm of rain. This picture is attached for the file.</p>
+       <div class="actions"><button class="btn">Ask for a field visit</button><button class="btn">Accept evidence</button></div>`,
+      `<div class="mapbox"><div class="parcel"></div><div class="dot" style="left:78%;top:18%;background:#9d2c2c"></div></div>
+       <div class="stats"><div class="stat"><b>620 m</b><span>Outside parcel</span></div><div class="stat"><b>Rejected</b><span>Over 500 m</span></div><div class="stat"><b>₹0</b><span>From this photo</span></div><div class="stat"><b>Retry</b><span>Asked of farmer</span></div></div>
+       <p>The pin is outside Ibrahim's registered field. The thread already asked him to send the location again from the field.</p>`
+    ];
+    stage.innerHTML = `<div class="desk"><div class="desk-top"><h3>Pooja Shah · Rural claims desk</h3><span class="chip">3 files in today's synthetic book</span></div>
+      <div class="split"><div class="queue">${cases.map((item, i) => `<button class="case ${i===state.desk?"on":""}" data-c="${i}" type="button"><b>${item.name}</b><span>${item.meta}</span><div class="badge ${item.badge}">${item.label}</div></button>`).join("")}</div>
+      <div class="detail"><h3 style="margin-top:0">${c.name}</h3>${bodies[state.desk]}</div></div></div>`;
+    stage.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { state.desk = Number(b.dataset.c); renderStage(); renderNotes(); });
+    return;
+  }
+
+  stage.innerHTML = `<div class="web"><div class="web-top"><h3>Ramesh Patil · Latur</h3><span class="chip">Farmer record</span></div>
+    <div class="web-grid">
+      <div class="panel"><h4>Active cover</h4>
+        <table><tr><th>Plan</th><th>Cover</th><th>Rain line</th></tr>
+        <tr><td>Premium · soybean · 1.2 ha</td><td>₹60,000</td><td>120 mm</td></tr></table>
+        <h4 style="margin-top:16px">Claims</h4>
+        <table><tr><th>Number</th><th>Status</th><th>Amount</th></tr>
+        <tr><td>CR-2026-1842</td><td>Approved</td><td>₹36,000</td></tr>
+        <tr><td>CR-2026-1104</td><td>Settled</td><td>₹18,000</td></tr></table>
+      </div>
+      <div class="panel"><h4>This season's rain</h4>
+        <div class="stat"><b>48 mm</b><span>against a 120 mm line</span></div>
+        <p>Shortfall 60%. Payout ₹36,000. The same numbers were read to him on WhatsApp.</p>
+        <h4>Latest payment</h4>
+        <p>Account ending 7890 · initiated · reference pending the morning settlement window.</p>
+      </div>
+    </div></div>`;
+}
+
+function renderNotes() {
+  const beat = beats()[state.beat] || beats()[0];
+  const note = beat.note;
+  const ch = chapter();
+  const tags = ch.kicker.includes("after") || ch.kicker.includes("later")
+    ? `<span class="pill later">After Q1</span>`
+    : `<span class="pill now">In the Q1 story</span>`;
+  notes.innerHTML = `
+    <div class="note-card">
+      <div class="kicker">Say this · beat ${state.beat + 1} of ${beats().length}</div>
+      <div class="say">${note.say}</div>
+    </div>
+    <div class="note-card"><strong>What the system did</strong>${note.system}</div>
+    <div class="note-card"><strong>Why it matters</strong>${note.kpi}</div>
+    <div class="pill-row">${tags}<span class="pill">Beat ${state.beat + 1}/${beats().length}</span></div>`;
+}
+
+function render() {
+  renderNav();
+  renderStage();
+  renderNotes();
+}
+
+document.getElementById("next").onclick = () => {
+  if (state.beat < beats().length - 1) state.beat += 1;
+  else if (state.index < chapters.length - 1) { state.index += 1; state.beat = 0; state.alt = false; }
+  render();
+};
+document.getElementById("prev").onclick = () => {
+  if (state.beat > 0) state.beat -= 1;
+  else if (state.index > 0) {
+    state.index -= 1;
+    state.alt = false;
+    state.beat = beats().length - 1;
+  }
+  render();
+};
+document.getElementById("alt").onclick = () => {
+  state.alt = !state.alt;
+  state.beat = 0;
+  render();
+};
+document.getElementById("notes-toggle").onclick = () => {
+  notes.classList.toggle("hidden");
+  document.getElementById("notes-toggle").textContent = notes.classList.contains("hidden") ? "Show notes" : "Hide notes";
+};
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") document.getElementById("next").click();
+  if (e.key === "ArrowLeft") document.getElementById("prev").click();
+});
+render();
+</script>
+</body>
+</html>
