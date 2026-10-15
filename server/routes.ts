@@ -20,6 +20,14 @@ import { runParametricScan } from "./workers/parametricWorker";
 import { normalizeToE164 } from "./lib/phone";
 import { DEV_OTP, personas } from "./synthetic/world";
 import { seedSyntheticWorld } from "./synthetic/persist";
+import {
+  trackFarmerOnboarded,
+  trackPayoutCompleted,
+  trackPayoutFailed,
+  trackPayoutInitiated,
+  trackPolicyPurchased,
+  trackPolicyQuoteRequested,
+} from "./lib/mixpanel-analytics";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -104,6 +112,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mobileNumber,
         isVerified: true, // Since OTP was verified
       });
+
+      trackFarmerOnboarded(
+        mobileNumber,
+        {
+          channel: "whatsapp",
+          language: "hi-IN",
+          state: user.state || "unknown",
+          district: user.district || "unknown",
+          is_returning: false,
+        },
+        {
+          $name: `Farmer-${user.district || "unknown"}`,
+          primary_channel: "whatsapp",
+          preferred_language: "hi-IN",
+          state: user.state || "unknown",
+          district: user.district || "unknown",
+          active_policies_count: 0,
+          total_premium_paid: 0,
+          total_payout_received: 0,
+          first_policy_season: "",
+          created_at: new Date().toISOString(),
+        },
+      );
 
       res.status(201).json(user);
     } catch (error) {
@@ -606,12 +637,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = new Date();
       const validTo = new Date(now);
       validTo.setMonth(validTo.getMonth() + 4);
+      const coverageAmount = plan.coverage * body.areaHa;
+      const premiumAmount = plan.premium * body.areaHa;
       const policy = await storage.createPolicy({
         farmerId: body.farmerId,
         landHoldingId: land.id,
         policyType: body.policyType,
-        coverageAmount: (plan.coverage * body.areaHa).toFixed(2),
-        premiumAmount: (plan.premium * body.areaHa).toFixed(2),
+        coverageAmount: coverageAmount.toFixed(2),
+        premiumAmount: premiumAmount.toFixed(2),
         rainfallThreshold: plan.threshold,
         season: body.season,
         validFrom: now,
@@ -621,6 +654,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dryDayLimit: 21,
         dryDayMaxMm: 5,
       });
+
+      const farmer = await storage.getUser(body.farmerId);
+      const phone = farmer?.mobileNumber;
+      const district = body.district || farmer?.district || "unknown";
+      const state = body.state || farmer?.state || "unknown";
+      const cropType = body.policyType === "basic" ? "soybean" : body.policyType === "premium" ? "cotton" : "wheat";
+
+      if (phone) {
+        trackPolicyQuoteRequested(phone, {
+          crop_type: cropType,
+          coverage_amount: coverageAmount,
+          district,
+          season: body.season,
+          channel: "whatsapp",
+          language: "hi-IN",
+        });
+        trackPolicyPurchased(phone, {
+          policy_id: String(policy.id),
+          crop_type: cropType,
+          coverage_amount: coverageAmount,
+          premium_amount: premiumAmount,
+          district,
+          state,
+          season: body.season,
+          channel: "whatsapp",
+          language: "hi-IN",
+        });
+      }
+
       res.status(201).json({ land, policy });
     } catch (error) {
       console.error("Policy purchase error:", error);
@@ -662,6 +724,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         landVerified: isLandVerified,
       });
 
+      const farmerUser = await storage.getUser(claim.farmerId);
+      const phone = farmerUser?.mobileNumber;
+      const district = policy.farmer?.district || farmerUser?.district || "unknown";
+      const cropType = policy.policy?.policyType || "unknown";
+
       if (!decision.approved) {
         await storage.updateClaim(claimId, {
           status: "rejected",
@@ -669,6 +736,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           actualRainfall: totalRainfall,
           aiDecision: decision,
         });
+        if (phone) {
+          trackPayoutFailed(phone, {
+            policy_id: String(claim.policyId),
+            failure_reason: decision.reasonCode || "threshold_not_met",
+            retry_count: 0,
+          });
+        }
         return;
       }
 
@@ -690,17 +764,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "initiated",
       });
 
-      setTimeout(async () => {
-        await paymentService.processPayment(payment.id);
-        await storage.updateClaim(claimId, { 
-          status: "settled",
-          settledAt: new Date()
+      if (phone) {
+        trackPayoutInitiated(phone, {
+          policy_id: String(claim.policyId),
+          payout_amount: decision.amount,
+          trigger_type: "rainfall_deficit",
+          district,
+          crop_type: cropType,
         });
-        await notificationService.sendClaimSettledNotification(
-          claim.farmerId,
-          claim.claimNumber,
-          decision.amount,
-        );
+      }
+
+      setTimeout(async () => {
+        try {
+          await paymentService.processPayment(payment.id);
+          await storage.updateClaim(claimId, { 
+            status: "settled",
+            settledAt: new Date()
+          });
+          if (phone) {
+            trackPayoutCompleted(phone, {
+              policy_id: String(claim.policyId),
+              payout_amount: decision.amount,
+              payment_method: "upi",
+              time_to_payout_hours: settlementTime,
+              district,
+            });
+          }
+          await notificationService.sendClaimSettledNotification(
+            claim.farmerId,
+            claim.claimNumber,
+            decision.amount,
+          );
+        } catch (payErr) {
+          console.error("Payment processing error:", payErr);
+          if (phone) {
+            trackPayoutFailed(phone, {
+              policy_id: String(claim.policyId),
+              failure_reason: "payment_processing_error",
+              retry_count: 1,
+            });
+          }
+        }
       }, 2000);
 
       await notificationService.sendClaimApprovedNotification(

@@ -174,9 +174,27 @@ Existing farmer, claim, chat, and dashboard routes remain.
 - **Interactive mockup:** [mockups/cropguard-2-workflow.html](mockups/cropguard-2-workflow.html)
 - **Screen recording:** [mockups/cropguard-2-walkthrough.mp4](mockups/cropguard-2-walkthrough.mp4)
 
+## Mixpanel analytics
+
+Tracking is split across two surfaces (this app is Express + Vite React, not Next.js):
+
+| Surface | SDK | Module |
+| --- | --- | --- |
+| Insurer console (browser) | `mixpanel-browser` | `client/src/lib/mixpanel-browser.ts` |
+| Farmer WhatsApp / voice / payouts (server) | `mixpanel` | `server/lib/mixpanel-server.ts` |
+
+Farmer `distinct_id` values are SHA-256 hashes of E.164 phones — never raw numbers, names, Aadhaar, bank details, or lat/lng.
+
+```bash
+npm run generate-data -- --dry-run   # preview synthetic events
+npm run generate-data               # import 90 days via Mixpanel Import API
+```
+
+See `.env.local.example` for token / service-account variables.
+
 ## Tech stack
 
-React 18, Wouter, TanStack Query, Tailwind, shadcn/ui · Node/Express, Drizzle ORM, Postgres (`pg`) · Vitest · Playwright · Docker Compose
+React 18, Wouter, TanStack Query, Tailwind, shadcn/ui · Node/Express, Drizzle ORM, Postgres (`pg`) · Mixpanel · Vitest · Playwright · Docker Compose
 
 ## License
 

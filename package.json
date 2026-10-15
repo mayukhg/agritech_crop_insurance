@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright test && echo 'Open reports/validation-report.html'",
     "test:smoke": "tsx scripts/smoke.ts",
-    "db:up": "docker start cropguard-pg || docker compose up -d postgres"
+    "db:up": "docker start cropguard-pg || docker compose up -d postgres",
+    "generate-data": "tsx scripts/generate-mixpanel-data.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -66,6 +67,8 @@
     "lucide-react": "^0.453.0",
     "memoizee": "^0.4.17",
     "memorystore": "^1.6.7",
+    "mixpanel": "^0.24.0",
+    "mixpanel-browser": "^2.84.0",
     "nanoid": "^3.3.20",
     "next-themes": "^0.4.6",
     "openid-client": "^6.5.1",
@@ -97,12 +100,15 @@
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "4.17.21",
     "@types/express-session": "^1.18.0",
+    "@types/mixpanel": "^2.14.9",
+    "@types/mixpanel-browser": "^2.60.0",
     "@types/node": "20.16.11",
     "@types/passport": "^1.0.16",
     "@types/passport-local": "^1.0.38",
     "@types/pg": "^8.23.1",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
@@ -113,6 +119,7 @@
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.1",
     "typescript": "5.6.3",
+    "uuid": "^14.0.3",
     "vite": "^5.4.14",
     "vitest": "^3.0.5"
   },

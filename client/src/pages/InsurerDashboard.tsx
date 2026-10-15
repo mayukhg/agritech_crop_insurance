@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import NavigationHeader from "@/components/NavigationHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,16 +10,52 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Download, File, ClipboardList, Bot, Clock, TrendingUp, TrendingDown } from "lucide-react";
 import type { Claim } from "@/types";
+import { identify, track } from "@/lib/mixpanel-browser";
 
 export default function InsurerDashboard() {
   const { t } = useTranslation();
+  const [seasonFilter, setSeasonFilter] = useState<string | null>("kharif");
+  const [districtFilter, setDistrictFilter] = useState<string | null>(null);
 
-  const { data: dashboardData, isLoading } = useQuery({
+  const { data: dashboardData, isLoading } = useQuery<{
+    stats?: {
+      totalPolicies?: number;
+      activeClaims?: number;
+      autoApprovalRate?: number;
+      avgSettlementTime?: number;
+    };
+    recentClaims?: Claim[];
+  }>({
     queryKey: ["/api/dashboard/insurer"],
   });
 
   const stats = dashboardData?.stats;
   const recentClaims = dashboardData?.recentClaims || [];
+
+  useEffect(() => {
+    identify("insurer_console", {
+      $name: "Insurer Console",
+      $email: "console@cropguard.demo",
+      organization_id: "org_cropguard_demo",
+      role: "claims_manager",
+      districts_managed: ["Latur", "Barmer", "Ludhiana"],
+      created_at: new Date().toISOString(),
+    });
+    track("insurer_signed_in", {
+      organization_id: "org_cropguard_demo",
+      role: "claims_manager",
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+    track("policy_list_viewed", {
+      filter_district: districtFilter,
+      filter_season: seasonFilter,
+      filter_crop_type: null,
+      result_count: stats?.totalPolicies ?? recentClaims.length,
+    });
+  }, [isLoading, stats?.totalPolicies, recentClaims.length, districtFilter, seasonFilter]);
 
   const getClaimStatusColor = (status: string) => {
     switch (status) {
@@ -55,7 +92,13 @@ export default function InsurerDashboard() {
               <p className="text-gray-600">{t('real_time_insights')}</p>
             </div>
             <div className="flex items-center space-x-4">
-              <Select defaultValue="30">
+              <Select
+                defaultValue="30"
+                onValueChange={(v) => {
+                  setSeasonFilter(v === "365" ? "kharif" : seasonFilter);
+                  setDistrictFilter(districtFilter);
+                }}
+              >
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
@@ -65,7 +108,30 @@ export default function InsurerDashboard() {
                   <SelectItem value="365">{t('this_season')}</SelectItem>
                 </SelectContent>
               </Select>
-              <Button className="bg-hsl(207, 90%, 54%) hover:bg-hsl(207, 90%, 49%)">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  track("parametric_rule_updated", {
+                    rule_type: "dry_day_count",
+                    old_value: 21,
+                    new_value: 21,
+                    district: districtFilter || "Latur",
+                  });
+                }}
+              >
+                Parametric rules
+              </Button>
+              <Button
+                className="bg-hsl(207, 90%, 54%) hover:bg-hsl(207, 90%, 49%)"
+                onClick={() => {
+                  track("report_exported", {
+                    report_type: "claims_overview",
+                    district: districtFilter || "all",
+                    season: seasonFilter || "kharif",
+                    format: "csv",
+                  });
+                }}
+              >
                 <Download className="w-4 h-4 mr-2" />
                 {t('export_report')}
               </Button>
@@ -224,10 +290,59 @@ export default function InsurerDashboard() {
                         </TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const status =
+                                  claim.status === "settled"
+                                    ? "settled"
+                                    : claim.status === "rejected"
+                                      ? "rejected"
+                                      : claim.status === "approved"
+                                        ? "payout_triggered"
+                                        : "pending_evidence";
+                                track("policy_detail_viewed", {
+                                  policy_id: String(claim.policyId || claim.id),
+                                  district: "unknown",
+                                  crop_type: "unknown",
+                                  status,
+                                });
+                                track("evidence_inspected", {
+                                  policy_id: String(claim.policyId || claim.id),
+                                  evidence_type: "photo",
+                                  review_outcome: "pending",
+                                });
+                              }}
+                            >
                               {t('view')}
                             </Button>
-                            <Button variant="outline" size="sm" className="text-hsl(142, 71%, 45%)">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-hsl(142, 71%, 45%)"
+                              onClick={() => {
+                                track("claim_debugged", {
+                                  policy_id: String(claim.policyId || claim.id),
+                                  issue_type: "manual_audit",
+                                  resolution_action: "opened_audit_trail",
+                                });
+                                if (claim.status === "approved" || claim.status === "settled") {
+                                  track("claim_approved", {
+                                    policy_id: String(claim.policyId || claim.id),
+                                    payout_amount: parseFloat(claim.claimAmount || "0"),
+                                    district: "unknown",
+                                    crop_type: "unknown",
+                                  });
+                                } else if (claim.status === "rejected") {
+                                  track("claim_rejected", {
+                                    policy_id: String(claim.policyId || claim.id),
+                                    rejection_reason: claim.reasonCode || "manual_review",
+                                    district: "unknown",
+                                  });
+                                }
+                              }}
+                            >
                               {t('audit')}
                             </Button>
                           </div>

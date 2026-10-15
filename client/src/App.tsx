@@ -19,6 +19,7 @@ import FarmerDashboard from "@/pages/FarmerDashboard";
 import InsurerDashboard from "@/pages/InsurerDashboard";
 import PaymentTracking from "@/pages/PaymentTracking";
 import { I18nProvider } from "./lib/i18n";
+import { MixpanelProvider } from "@/components/MixpanelProvider";
 
 // Application routing configuration
 function Router() {
@@ -40,10 +41,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <MixpanelProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </MixpanelProvider>
       </I18nProvider>
     </QueryClientProvider>
   );

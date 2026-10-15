@@ -11,6 +11,13 @@ import {
 } from "@shared/schema";
 import { decideClaim, isSurveyNumberVerifiable } from "../agent/decideClaim";
 import { landHoldings } from "@shared/schema";
+import {
+  trackPayoutCompleted,
+  trackPayoutInitiated,
+  trackPayoutTriggerEvaluated,
+  trackPayoutTriggerFired,
+  trackWeatherDataIngested,
+} from "../lib/mixpanel-analytics";
 
 /**
  * Scan active dry_day policies. If trailing dry days >= dryDayLimit,
@@ -25,6 +32,7 @@ export async function runParametricScan(asOf: Date = new Date()): Promise<{
   const details: string[] = [];
   let disbursed = 0;
   let skipped = 0;
+  const firedByDistrict = new Map<string, { count: number; amount: number }>();
 
   const active = await db
     .select()
@@ -65,6 +73,25 @@ export async function runParametricScan(asOf: Date = new Date()): Promise<{
 
     const dryDays = rows.filter((r) => r.rainfall < policy.dryDayMaxMm).length;
     const totalRain = rows.reduce((s, r) => s + r.rainfall, 0);
+    const phone = farmer.mobileNumber;
+
+    trackWeatherDataIngested(`weather_${farmer.district}`, {
+      district: farmer.district,
+      state: farmer.state,
+      data_source: rows[0]?.source || "unknown",
+      rainfall_mm: totalRain,
+      dry_day_count: dryDays,
+    });
+
+    if (phone) {
+      trackPayoutTriggerEvaluated(phone, {
+        policy_id: String(policy.id),
+        district: farmer.district,
+        trigger_type: "dry_day",
+        threshold_met: dryDays >= policy.dryDayLimit,
+        season: policy.season || "kharif",
+      });
+    }
 
     if (dryDays < policy.dryDayLimit) {
       skipped += 1;
@@ -169,10 +196,41 @@ export async function runParametricScan(asOf: Date = new Date()): Promise<{
       disbursementRef: payment.transactionId,
     });
 
+    if (phone) {
+      trackPayoutInitiated(phone, {
+        policy_id: String(policy.id),
+        payout_amount: amount,
+        trigger_type: "dry_day",
+        district: farmer.district,
+        crop_type: policy.policyType || "unknown",
+      });
+      trackPayoutCompleted(phone, {
+        policy_id: String(policy.id),
+        payout_amount: amount,
+        payment_method: (payment.paymentMethod as "upi" | "bank_transfer") || "upi",
+        time_to_payout_hours: Number(process.env.CLAIM_SETTLEMENT_HOURS || 6),
+        district: farmer.district,
+      });
+    }
+
+    const agg = firedByDistrict.get(farmer.district) || { count: 0, amount: 0 };
+    agg.count += 1;
+    agg.amount += amount;
+    firedByDistrict.set(farmer.district, agg);
+
     disbursed += 1;
     details.push(
       `policy ${policy.id}: disbursed ₹${amount} ref ${payment.transactionId} (dryDays=${dryDays})`,
     );
+  }
+
+  for (const [district, agg] of firedByDistrict) {
+    trackPayoutTriggerFired(`district_${district}`, {
+      district,
+      trigger_type: "dry_day",
+      affected_policies_count: agg.count,
+      total_payout_amount: agg.amount,
+    });
   }
 
   return { evaluated: active.length, disbursed, skipped, details };
