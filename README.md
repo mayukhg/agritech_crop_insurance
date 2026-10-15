@@ -176,7 +176,9 @@ Existing farmer, claim, chat, and dashboard routes remain.
 
 ## Mixpanel analytics
 
-Tracking is split across two surfaces (this app is Express + Vite React, not Next.js):
+CropGuard emits product analytics to [Mixpanel](https://mixpanel.com) (project `4070033`). Farmer journeys are tracked server-side from WhatsApp/voice and payout workers; insurer console actions use the browser SDK.
+
+**Public dashboard:** [CropGuard Mixpanel board](https://mixpanel.com/project/4070033/view/4566488/app/boards#id=11588448)
 
 | Surface | SDK | Module |
 | --- | --- | --- |
