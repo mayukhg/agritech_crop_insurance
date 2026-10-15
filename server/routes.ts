@@ -7,13 +7,19 @@ import {
   insertLandHoldingSchema, 
   insertPolicySchema, 
   insertClaimSchema,
-  insertOtpVerificationSchema 
 } from "@shared/schema";
 import { weatherService } from "./services/weatherService";
 import { blockchainService } from "./services/blockchainService";
-import { aiService } from "./services/aiService";
 import { paymentService } from "./services/paymentService";
 import { notificationService } from "./services/notificationService";
+import { decideClaim, isSurveyNumberVerifiable } from "./agent/decideClaim";
+import { orchestrator } from "./agent/orchestrator";
+import { verifyWhatsAppSignature } from "./channels/whatsapp/signature";
+import { handleWhatsAppInbound } from "./channels/whatsapp/inbound";
+import { runParametricScan } from "./workers/parametricWorker";
+import { normalizeToE164 } from "./lib/phone";
+import { DEV_OTP, personas } from "./synthetic/world";
+import { seedSyntheticWorld } from "./synthetic/persist";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -54,8 +60,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/verify-otp", async (req, res) => {
     try {
       const { mobileNumber, otp, purpose = "registration" } = req.body;
+      const normalized = normalizeToE164(mobileNumber) || mobileNumber;
+
+      // Fixed demo OTP for Ramesh's seeded number in development
+      if (
+        process.env.NODE_ENV === "development" &&
+        otp === DEV_OTP &&
+        normalizeToE164(mobileNumber) === personas.ramesh.mobileNumber
+      ) {
+        return res.json({ message: "OTP verified successfully", demo: true });
+      }
       
-      const otpRecord = await storage.getOtpVerification(mobileNumber, purpose);
+      const otpRecord = await storage.getOtpVerification(normalized, purpose)
+        || await storage.getOtpVerification(mobileNumber, purpose);
       
       if (!otpRecord || otpRecord.otp !== otp) {
         return res.status(400).json({ message: "Invalid or expired OTP" });
@@ -74,15 +91,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/users/register", async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
+      const mobileNumber = normalizeToE164(userData.mobileNumber) || userData.mobileNumber;
       
       // Check if user already exists
-      const existingUser = await storage.getUserByMobile(userData.mobileNumber);
+      const existingUser = await storage.getUserByMobile(mobileNumber);
       if (existingUser) {
         return res.status(400).json({ message: "User already exists with this mobile number" });
       }
 
       const user = await storage.createUser({
         ...userData,
+        mobileNumber,
         isVerified: true, // Since OTP was verified
       });
 
@@ -112,8 +131,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/users/login", async (req, res) => {
     try {
       const { mobileNumber } = req.body;
+      const normalized = normalizeToE164(mobileNumber) || mobileNumber;
       
-      const user = await storage.getUserByMobile(mobileNumber);
+      const user = await storage.getUserByMobile(normalized)
+        || await storage.getUserByMobile(mobileNumber);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -329,8 +350,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let aiResponse = null;
       if (sender === "user") {
-        // Get AI response
-        aiResponse = await aiService.processMessage(message, conversation.language, conversation.farmerId);
+        const policies = await storage.getPoliciesByFarmer(conversation.farmerId);
+        const active = policies.find((p) => p.status === "active");
+        const holdings = await storage.getLandHoldingsByFarmer(conversation.farmerId);
+        const orch = await orchestrator.handle({
+          channel: "web",
+          externalMessageId: `web-${conversationId}-${Date.now()}`,
+          farmerId: conversation.farmerId,
+          messageType: "text",
+          text: message,
+          language: conversation.language,
+          policy: active
+            ? {
+                coverageAmount: parseFloat(active.coverageAmount),
+                rainfallThreshold: active.rainfallThreshold,
+                surveyNumber: holdings[0]?.surveyNumber,
+              }
+            : undefined,
+        });
+        aiResponse = {
+          message: orch.text,
+          metadata: { ...orch.metadata, intent: orch.intent, modelUsed: orch.modelUsed },
+        };
         
         messages.push({
           id: Date.now() + 1,
@@ -345,7 +386,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ 
         messages,
-        aiResponse: aiResponse?.message 
+        aiResponse: aiResponse?.message,
+        intent: aiResponse?.metadata?.intent,
       });
     } catch (error) {
       console.error("Send message error:", error);
@@ -443,110 +485,232 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // --- CropGuard 2.0 ambient channel & workers ---
+
+  app.get("/api/whatsapp/webhook", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+    if (mode === "subscribe" && token === (process.env.WHATSAPP_VERIFY_TOKEN || "cropguard-dev")) {
+      return res.status(200).send(challenge);
+    }
+    return res.sendStatus(403);
+  });
+
+  app.post("/api/whatsapp/webhook", async (req, res) => {
+    try {
+      const signature = req.header("x-hub-signature-256") || undefined;
+      const raw = JSON.stringify(req.body);
+      if (!verifyWhatsAppSignature(raw, signature)) {
+        return res.status(401).json({ message: "Invalid signature" });
+      }
+      // Ack immediately; process asynchronously for latency budget
+      res.status(200).json({ status: "received" });
+      handleWhatsAppInbound(req.body).catch((err) =>
+        console.error("WhatsApp inbound error:", err),
+      );
+    } catch (error) {
+      console.error("WhatsApp webhook error:", error);
+      if (!res.headersSent) res.status(500).json({ message: "Webhook failed" });
+    }
+  });
+
+  /** Synchronous fixture replay for demos / regression (waits for reply). */
+  app.post("/api/whatsapp/demo-inbound", async (req, res) => {
+    try {
+      const result = await handleWhatsAppInbound(req.body);
+      res.json(result);
+    } catch (error) {
+      console.error("Demo inbound error:", error);
+      res.status(500).json({ message: "Failed to process inbound" });
+    }
+  });
+
+  app.post("/api/workers/parametric-scan", async (req, res) => {
+    try {
+      if (process.env.WORKER_ENABLED === "false") {
+        return res.status(403).json({ message: "Workers disabled" });
+      }
+      const asOf = req.body?.asOf ? new Date(req.body.asOf) : new Date("2026-09-30T12:00:00+05:30");
+      const result = await runParametricScan(asOf);
+      res.json(result);
+    } catch (error) {
+      console.error("Parametric scan error:", error);
+      res.status(500).json({ message: "Scan failed" });
+    }
+  });
+
+  app.post("/api/seed/synthetic", async (req, res) => {
+    try {
+      if (process.env.NODE_ENV === "production" && req.header("x-seed-token") !== process.env.SEED_TOKEN) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const result = await seedSyntheticWorld();
+      res.json({ message: "Synthetic world seeded", ...result });
+    } catch (error) {
+      console.error("Seed error:", error);
+      res.status(500).json({ message: "Seed failed", error: String(error) });
+    }
+  });
+
+  app.get("/api/dev/scenarios", async (_req, res) => {
+    try {
+      const scenarios = [
+        { id: "ramesh", label: "Ramesh — settled + approved claims", phone: personas.ramesh.mobileNumber },
+        { id: "suresh", label: "Suresh — farm twin / advisory", phone: personas.suresh.mobileNumber },
+        { id: "anita", label: "Anita — 21 dry-day parametric payout", phone: personas.anita.mobileNumber },
+        { id: "ibrahim", label: "Ibrahim — rejected / failed payment", phone: personas.ibrahim.mobileNumber },
+        { id: "meera", label: "Meera — awaiting registration", phone: personas.meera.mobileNumber },
+        { id: "pooja", label: "Pooja — insurer desk", phone: personas.pooja.mobileNumber },
+      ];
+      res.json({ clock: "2026-10-01", scenarios, mockup: "/mockups/cropguard-2-workflow.html" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to list scenarios" });
+    }
+  });
+
+  // Purchase helper: create land + policy in one call (used by PolicySelection)
+  app.post("/api/policies/purchase", async (req, res) => {
+    try {
+      const schema = z.object({
+        farmerId: z.number(),
+        policyType: z.enum(["basic", "premium", "comprehensive"]),
+        areaHa: z.number().positive().default(1),
+        surveyNumber: z.string().min(6),
+        season: z.enum(["kharif", "rabi"]).default("kharif"),
+        state: z.string().optional(),
+        district: z.string().optional(),
+        coordinates: z
+          .object({ lat: z.number(), lng: z.number() })
+          .optional(),
+      });
+      const body = schema.parse(req.body);
+      const catalog: Record<string, { premium: number; coverage: number; threshold: number }> = {
+        basic: { premium: 2500, coverage: 25000, threshold: 100 },
+        premium: { premium: 4000, coverage: 50000, threshold: 120 },
+        comprehensive: { premium: 6500, coverage: 75000, threshold: 150 },
+      };
+      const plan = catalog[body.policyType];
+      const blockchainHash = await blockchainService.verifyLandOwnership(
+        body.farmerId,
+        body.surveyNumber,
+      );
+      const land = await storage.createLandHolding({
+        farmerId: body.farmerId,
+        area: body.areaHa.toFixed(2),
+        surveyNumber: body.surveyNumber,
+        coordinates: body.coordinates || null,
+        isVerified: !!blockchainHash,
+        blockchainHash,
+      });
+      const now = new Date();
+      const validTo = new Date(now);
+      validTo.setMonth(validTo.getMonth() + 4);
+      const policy = await storage.createPolicy({
+        farmerId: body.farmerId,
+        landHoldingId: land.id,
+        policyType: body.policyType,
+        coverageAmount: (plan.coverage * body.areaHa).toFixed(2),
+        premiumAmount: (plan.premium * body.areaHa).toFixed(2),
+        rainfallThreshold: plan.threshold,
+        season: body.season,
+        validFrom: now,
+        validTo,
+        status: "active",
+        triggerType: "cumulative_rainfall",
+        dryDayLimit: 21,
+        dryDayMaxMm: 5,
+      });
+      res.status(201).json({ land, policy });
+    } catch (error) {
+      console.error("Policy purchase error:", error);
+      res.status(500).json({ message: "Failed to purchase policy" });
+    }
+  });
+
   // Automated claim processing function
   async function processClaimAsync(claimId: number) {
     try {
       const claim = await storage.getClaim(claimId);
       if (!claim) return;
 
-      // Update status to processing
       await storage.updateClaim(claimId, { 
         status: "processing",
         processedAt: new Date()
       });
 
-      // Get policy details
       const policy = await storage.getPolicyWithDetails(claim.policyId);
       if (!policy) return;
 
-      // Verify land ownership via blockchain
-      const isLandVerified = await blockchainService.verifyLandOwnership(
+      const isLandVerified = !!(await blockchainService.verifyLandOwnership(
         claim.farmerId,
         policy.landHolding?.surveyNumber
-      );
+      )) || isSurveyNumberVerifiable(policy.landHolding?.surveyNumber);
 
-      if (!isLandVerified) {
-        await storage.updateClaim(claimId, {
-          status: "rejected",
-          reasonCode: "land_not_verified",
-        });
-        return;
-      }
-
-      // Get weather data for the policy period
-      const weatherData = await weatherService.getRainfallData(
+      const weatherRows = await weatherService.getRainfallData(
         policy.farmer.district,
         policy.farmer.state,
         policy.policy.validFrom,
         policy.policy.validTo
       );
 
-      const totalRainfall = weatherData.reduce((sum, data) => sum + data.rainfall, 0);
+      const totalRainfall = weatherRows.reduce((sum, data) => sum + data.rainfall, 0);
+      const decision = decideClaim({
+        rainfallMm: totalRainfall,
+        rainfallThresholdMm: policy.policy.rainfallThreshold,
+        coverageAmount: parseFloat(policy.policy.coverageAmount),
+        landVerified: isLandVerified,
+      });
 
-      // Check if rainfall is below threshold
-      if (totalRainfall >= policy.policy.rainfallThreshold) {
+      if (!decision.approved) {
         await storage.updateClaim(claimId, {
           status: "rejected",
-          reasonCode: "rainfall_above_threshold",
+          reasonCode: decision.reasonCode || "rejected",
           actualRainfall: totalRainfall,
+          aiDecision: decision,
         });
         return;
       }
 
-      // Calculate claim amount (proportional to shortfall)
-      const rainfallShortfall = policy.policy.rainfallThreshold - totalRainfall;
-      const shortfallPercentage = rainfallShortfall / policy.policy.rainfallThreshold;
-      const claimAmount = policy.policy.coverageAmount * shortfallPercentage;
-
-      // AI decision logic
-      const aiDecision = {
-        landVerified: isLandVerified,
-        actualRainfall: totalRainfall,
-        thresholdRainfall: policy.policy.rainfallThreshold,
-        shortfallPercentage: Math.round(shortfallPercentage * 100),
-        recommendedAmount: Math.round(claimAmount),
-        confidence: 0.95,
-        reasoning: `Rainfall of ${totalRainfall}mm is below threshold of ${policy.policy.rainfallThreshold}mm. Land ownership verified via blockchain.`
-      };
-
-      // Approve the claim
-      const settlementTime = Math.floor(Math.random() * 12) + 1; // 1-12 hours
+      const settlementTime = Number(process.env.CLAIM_SETTLEMENT_HOURS || 6);
       await storage.updateClaim(claimId, {
         status: "approved",
-        claimAmount: claimAmount.toString(),
+        claimAmount: decision.amount.toString(),
         actualRainfall: totalRainfall,
-        aiDecision,
+        aiDecision: decision,
         settlementTime,
       });
 
-      // Initiate payment
       const payment = await storage.createPayment({
         claimId,
-        amount: claimAmount.toString(),
-        bankAccount: "****7890", // Mock bank account
-        ifscCode: "SBIN0001234", // Mock IFSC
+        amount: decision.amount.toString(),
+        bankAccount: "****7890",
+        ifscCode: "SBIN0001234",
         transactionId: `TXN${Date.now()}`,
         status: "initiated",
       });
 
-      // Process payment (mock)
       setTimeout(async () => {
         await paymentService.processPayment(payment.id);
         await storage.updateClaim(claimId, { 
           status: "settled",
           settledAt: new Date()
         });
+        await notificationService.sendClaimSettledNotification(
+          claim.farmerId,
+          claim.claimNumber,
+          decision.amount,
+        );
+      }, 2000);
 
-        // Send notification
-        await notificationService.sendClaimSettledNotification(claim.farmerId, claim.claimNumber, claimAmount);
-      }, 2000); // 2 second delay to simulate processing
-
-      // Send approval notification
-      await notificationService.sendClaimApprovedNotification(claim.farmerId, claim.claimNumber, claimAmount);
+      await notificationService.sendClaimApprovedNotification(
+        claim.farmerId,
+        claim.claimNumber,
+        decision.amount,
+      );
 
     } catch (error) {
       console.error("Process claim error:", error);
-      // Update claim to failed status
       await storage.updateClaim(claimId, {
         status: "rejected",
         reasonCode: "processing_error",

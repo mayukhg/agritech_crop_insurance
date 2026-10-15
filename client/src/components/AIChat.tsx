@@ -26,8 +26,10 @@ export default function AIChat({ language }: AIChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Mock farmer ID - in a real app, this would come from authentication
-  const farmerId = 1;
+  // Prefer farmer id from registration / seed; fall back to 1 for demos
+  const farmerId = Number(
+    (typeof window !== "undefined" && localStorage.getItem("cropguard_farmer_id")) || "1",
+  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

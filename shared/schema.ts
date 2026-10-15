@@ -43,6 +43,10 @@ export const policies = pgTable("policies", {
   validFrom: timestamp("valid_from").notNull(),
   validTo: timestamp("valid_to").notNull(),
   status: text("status").notNull().default("active"), // active, expired, cancelled
+  // CropGuard 2.0 parametric trigger fields
+  triggerType: text("trigger_type").notNull().default("cumulative_rainfall"), // cumulative_rainfall | dry_day
+  dryDayLimit: integer("dry_day_limit").notNull().default(21),
+  dryDayMaxMm: integer("dry_day_max_mm").notNull().default(5),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -73,6 +77,8 @@ export const payments = pgTable("payments", {
   transactionId: text("transaction_id"),
   status: text("status").notNull().default("initiated"), // initiated, processing, completed, failed
   paymentMethod: text("payment_method").default("bank_transfer"),
+  upiVpa: text("upi_vpa"),
+  disbursementMode: text("disbursement_mode").default("bank_transfer"), // bank_transfer | upi
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
 });
@@ -250,6 +256,112 @@ export const insertOtpVerificationSchema = createInsertSchema(otpVerification).o
   createdAt: true,
 });
 
+// CropGuard 2.0 — ambient channel tables
+export const farmerChannelProfiles = pgTable("farmer_channel_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull().unique(),
+  phoneE164: text("phone_e164").notNull().unique(),
+  waId: text("wa_id"),
+  preferredLanguage: text("preferred_language").notNull().default("hi-IN"),
+  preferredChannel: text("preferred_channel").notNull().default("whatsapp"), // whatsapp | sms | voice
+  upiVpa: text("upi_vpa"),
+  advisoryOptIn: boolean("advisory_opt_in").default(true),
+  lastInboundAt: timestamp("last_inbound_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const ambientMessages = pgTable("ambient_messages", {
+  id: serial("id").primaryKey(),
+  externalMessageId: text("external_message_id").notNull().unique(),
+  phoneE164: text("phone_e164").notNull(),
+  direction: text("direction").notNull(), // inbound | outbound
+  messageType: text("message_type").notNull(), // text | voice | image | location | template
+  rawMediaUrl: text("raw_media_url"),
+  transcribedText: text("transcribed_text"),
+  asrConfidence: decimal("asr_confidence", { precision: 4, scale: 3 }),
+  language: text("language"),
+  extractedEntities: jsonb("extracted_entities"),
+  aiModelUsed: text("ai_model_used"),
+  intent: text("intent"),
+  latencyMs: integer("latency_ms"),
+  estimatedCost: decimal("estimated_cost", { precision: 10, scale: 6 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const channelSessions = pgTable("channel_sessions", {
+  id: serial("id").primaryKey(),
+  phoneE164: text("phone_e164").notNull(),
+  state: jsonb("state").notNull().default({}),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const farmProfiles = pgTable("farm_profiles", {
+  id: serial("id").primaryKey(),
+  farmerId: integer("farmer_id").references(() => users.id).notNull(),
+  landHoldingId: integer("land_holding_id").references(() => landHoldings.id),
+  crop: text("crop").notNull(),
+  sowingDate: timestamp("sowing_date"),
+  acreage: decimal("acreage", { precision: 10, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const damageAssessments = pgTable("damage_assessments", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").references(() => ambientMessages.id),
+  claimId: integer("claim_id").references(() => claims.id),
+  damageType: text("damage_type"),
+  severityPct: integer("severity_pct"),
+  confidence: decimal("confidence", { precision: 4, scale: 3 }),
+  lat: decimal("lat", { precision: 10, scale: 7 }),
+  lng: decimal("lng", { precision: 10, scale: 7 }),
+  distanceM: integer("distance_m"),
+  accepted: boolean("accepted").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const parametricTriggers = pgTable("parametric_triggers", {
+  id: serial("id").primaryKey(),
+  policyId: integer("policy_id").references(() => policies.id).notNull(),
+  triggerType: text("trigger_type").notNull(), // drought_deficit | flood_excess | hail
+  windowStart: timestamp("window_start").notNull(),
+  windowEnd: timestamp("window_end").notNull(),
+  dryDayCount: integer("dry_day_count"),
+  rainfallMm: integer("rainfall_mm"),
+  satelliteNdviDelta: decimal("satellite_ndvi_delta", { precision: 6, scale: 4 }),
+  isAutoDisbursed: boolean("is_auto_disbursed").default(false),
+  claimId: integer("claim_id").references(() => claims.id),
+  disbursementRef: text("disbursement_ref"),
+  triggeredAt: timestamp("triggered_at").defaultNow(),
+});
+
+export const insertFarmerChannelProfileSchema = createInsertSchema(farmerChannelProfiles).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertAmbientMessageSchema = createInsertSchema(ambientMessages).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertChannelSessionSchema = createInsertSchema(channelSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertFarmProfileSchema = createInsertSchema(farmProfiles).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertDamageAssessmentSchema = createInsertSchema(damageAssessments).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertParametricTriggerSchema = createInsertSchema(parametricTriggers).omit({
+  id: true,
+  triggeredAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -269,3 +381,15 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type OtpVerification = typeof otpVerification.$inferSelect;
 export type InsertOtpVerification = z.infer<typeof insertOtpVerificationSchema>;
+export type FarmerChannelProfile = typeof farmerChannelProfiles.$inferSelect;
+export type InsertFarmerChannelProfile = z.infer<typeof insertFarmerChannelProfileSchema>;
+export type AmbientMessage = typeof ambientMessages.$inferSelect;
+export type InsertAmbientMessage = z.infer<typeof insertAmbientMessageSchema>;
+export type ChannelSession = typeof channelSessions.$inferSelect;
+export type InsertChannelSession = z.infer<typeof insertChannelSessionSchema>;
+export type FarmProfile = typeof farmProfiles.$inferSelect;
+export type InsertFarmProfile = z.infer<typeof insertFarmProfileSchema>;
+export type DamageAssessment = typeof damageAssessments.$inferSelect;
+export type InsertDamageAssessment = z.infer<typeof insertDamageAssessmentSchema>;
+export type ParametricTrigger = typeof parametricTriggers.$inferSelect;
+export type InsertParametricTrigger = z.infer<typeof insertParametricTriggerSchema>;

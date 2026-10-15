@@ -1,0 +1,42 @@
+{
+  "R1": {
+    "input": {
+      "rainfallMm": 48,
+      "rainfallThresholdMm": 120,
+      "coverageAmount": 60000,
+      "landVerified": true
+    },
+    "expected": {
+      "approved": true,
+      "amount": 36000,
+      "shortfallPercentage": 60,
+      "reasonCode": null
+    }
+  },
+  "R2": {
+    "input": {
+      "rainfallMm": 120,
+      "rainfallThresholdMm": 120,
+      "coverageAmount": 60000,
+      "landVerified": true
+    },
+    "expected": {
+      "approved": false,
+      "amount": 0,
+      "reasonCode": "rainfall_above_threshold"
+    }
+  },
+  "R3": {
+    "input": {
+      "rainfallMm": 48,
+      "rainfallThresholdMm": 120,
+      "coverageAmount": 60000,
+      "landVerified": false
+    },
+    "expected": {
+      "approved": false,
+      "amount": 0,
+      "reasonCode": "land_not_verified"
+    }
+  }
+}

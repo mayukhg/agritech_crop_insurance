@@ -29,18 +29,33 @@ export default function PolicySelection() {
 
   const selectPolicyMutation = useMutation({
     mutationFn: async (policyType: PolicyType) => {
-      // In a real app, this would create a policy purchase flow
-      // For now, we'll just redirect to claim filing
-      return policyType;
-    },
-    onSuccess: () => {
-      toast({
-        title: "Policy Selected",
-        description: "Redirecting to complete your policy purchase...",
+      const farmerId = Number(localStorage.getItem("cropguard_farmer_id") || "1");
+      const response = await apiRequest("POST", "/api/policies/purchase", {
+        farmerId,
+        policyType: policyType.id,
+        areaHa: 1.4,
+        surveyNumber: `SYNTH-${farmerId}-4418`,
+        season: "kharif",
+        coordinates: { lat: 19.9975, lng: 73.7898 },
       });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Policy purchased",
+        description: `Policy #${data.policy?.id} is active. Opening claims…`,
+      });
+      const farmerId = data.policy?.farmerId || localStorage.getItem("cropguard_farmer_id") || "1";
       setTimeout(() => {
-        setLocation("/claim");
-      }, 1500);
+        setLocation(`/dashboard/farmer/${farmerId}`);
+      }, 1200);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Could not purchase policy",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -64,6 +79,9 @@ export default function PolicySelection() {
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Choose Your Protection Plan</h2>
             <p className="text-xl text-gray-600">Drought insurance policies tailored for Indian farmers</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Selecting a plan creates a land holding and an active policy (CropGuard 2.0).
+            </p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -131,7 +149,7 @@ export default function PolicySelection() {
                     {selectPolicyMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Selecting...
+                        Purchasing...
                       </>
                     ) : (
                       "Select Plan"
@@ -140,21 +158,6 @@ export default function PolicySelection() {
                 </CardContent>
               </Card>
             ))}
-          </div>
-
-          <div className="mt-16 text-center">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-2xl mx-auto">
-              <h3 className="text-lg font-semibold text-blue-900 mb-2">
-                Need Help Choosing?
-              </h3>
-              <p className="text-blue-700 mb-4">
-                Our AI assistant can help you select the best policy based on your farm size, location, and risk profile.
-              </p>
-              <Button variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-100">
-                <i className="fas fa-robot mr-2"></i>
-                Chat with AI Assistant
-              </Button>
-            </div>
           </div>
         </div>
       </section>

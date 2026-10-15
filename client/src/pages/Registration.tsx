@@ -112,6 +112,9 @@ export default function Registration() {
       return response.json();
     },
     onSuccess: (user) => {
+      if (user?.id) {
+        localStorage.setItem("cropguard_farmer_id", String(user.id));
+      }
       toast({
         title: "Registration Successful",
         description: "Your account has been created successfully.",

@@ -13,14 +13,13 @@ export class WeatherService {
   // Mock weather data service - in production this would call actual weather APIs like IMD
   async getRainfallData(district: string, state: string, startDate: Date, endDate: Date): Promise<WeatherData[]> {
     try {
-      // First try to get data from database
+      // Prefer stored rows (including SYNTHETIC seed data). Only invent IMD_MOCK when empty.
       let weatherData = await storage.getWeatherData(district, state, startDate, endDate);
-      
-      // If no data found, generate mock data for demo purposes
+
       if (weatherData.length === 0) {
         weatherData = await this.generateMockWeatherData(district, state, startDate, endDate);
       }
-      
+
       return weatherData;
     } catch (error) {
       console.error("Weather service error:", error);

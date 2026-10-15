@@ -1,6 +1,36 @@
 import { storage } from "../storage";
 
 export class PaymentService {
+  /**
+   * Disburse via UPI VPA. PAYMENT_PROVIDER=mock (default) records completion locally.
+   */
+  async disburse(opts: {
+    claimId: number;
+    amount: number;
+    upiVpa?: string;
+  }): Promise<{ success: boolean; transactionId?: string; mode: string }> {
+    const mode = process.env.PAYMENT_PROVIDER || "mock";
+    const transactionId = `UPI${Date.now()}`;
+    const payment = await storage.createPayment({
+      claimId: opts.claimId,
+      amount: opts.amount.toString(),
+      bankAccount: "****7890",
+      ifscCode: "SBIN0001234",
+      transactionId,
+      status: mode === "mock" ? "completed" : "processing",
+      paymentMethod: "upi",
+      upiVpa: opts.upiVpa || null,
+      disbursementMode: "upi",
+    });
+    if (mode === "mock") {
+      await storage.updatePayment(payment.id, {
+        status: "completed",
+        completedAt: new Date(),
+      });
+    }
+    return { success: true, transactionId, mode };
+  }
+
   // Mock payment processing
   async processPayment(paymentId: number): Promise<{
     success: boolean;
