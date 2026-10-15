@@ -3,7 +3,7 @@
  * Usage: npm run test:smoke
  * Skips cleanly when the server is down so CI unit jobs stay green.
  */
-const base = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
+const base = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5055";
 
 async function main() {
   try {
